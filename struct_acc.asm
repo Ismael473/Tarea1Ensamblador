@@ -3,6 +3,11 @@
 
 .DATA
     ; Definiciones simbolicas para la estructura de datos
+    ; Indican el tamano en bytes de cada dato (para navegar la estructura)
+    ; ACC_NUM 2 bytes
+    ; ACC_HOLDER 20 bytes
+    ; ACC_BAL 4 bytes
+    ; ACC_STATE 1 byte
     MAX_ACC     equ 10
     ACC_SIZE    equ 27
     
@@ -15,21 +20,74 @@
     ACCOUNTS    db ACC_SIZE * MAX_ACC dup(?) ; Define el espacio de memoria para diez cuentas.
     ACC_COUNT   db 0 ; Contador de cuentas
     
-    TEST_INPUT  db 20, ?, 20 dup(?)
+    HOLDER_TEST_INPUT  db 21, ?, 21 dup(?)
+    ACC_NUM_TEST_INPUT db 6, ?, 6 dup(?)
 .CODE
 
 create_account PROC
-    mov cl, [TEST_INPUT+1]
-    xor ch, ch
-    lea si, TEST_INPUT+2
-print_name:
-    mov dl, [si]
-    mov ah, 02h
+    mov al, MAX_ACC
+    cmp ACC_COUNT, al
+    jae acc_limit ; Se fija si hay espacio para una nueva cuenta
+    
+    mov ah, 0Ah
+    lea dx, HOLDER_TEST_INPUT ; INPUT DE TESTEO
     int 21h
     
-    inc si
-    loop print_name
+    mov ah, 0Ah
+    lea dx, ACC_NUM_TEST_INPUT ; INPUT DE TESTEO
+    int 21h
     
+    xor ax, ax ; Limpiar registros
+    xor cx, cx
+    xor dx, dx
+    xor bh, bh
+    mov cl, [ACC_NUM_TEST_INPUT+1] ; Numero de caracteres que el usuario ingreso
+    lea si, ACC_NUM_TEST_INPUT+2   ; La direccion de memoria donde empieza el string
+
+convert_acc_number:
+    mov bl, [si]  ; Asignamos el caracter
+    sub bl, '0'   ; Conversion a entero
+    mov dx, 10    ; Asignar diez para multiplicar el numero anterior ax * 10 + bl
+    mul dx
+    add ax, bx 
+   
+    inc si        ; Pasar al siguiente caracter
+
+    loop convert_acc_number
+    
+    mov cl, ACC_COUNT
+    lea si, ACCOUNTS  ; Inicio del bloque de memoria de las cuentas
+    xor bx, bx   
+    
+check_existance:
+    cmp cl, 0
+    je create_new_acc    ; Ninguna cuenta tiene el mismo numero, creamos una nueva
+    
+    mov bx, [si]
+    cmp ax, bx           ; El numero ingresado tiene es el mismo para otra cuenta, evitamos crear otra.
+    je duplicated_acc
+    
+    dec cl
+    add si, ACC_SIZE     ; Saltamos a la siguiente cuenta
+    jmp check_existance    
+
+create_new_acc:
+    mov dx, ax
+    xor ax, ax
+    mov al, ACC_COUNT
+    mov bl, ACC_SIZE
+    mul bl
+    lea si, ACCOUNTS
+    add si, ax
+    
+    mov [si+ACC_NUM], dx
+    
+    inc ACC_COUNT
+     
+acc_limit:
+    ret
+    
+duplicated_acc:
     ret
         
 create_account ENDP
@@ -43,10 +101,7 @@ main:
     mov ax, @data
     mov ds, ax
     
-    mov ah, 0Ah
-    lea dx, TEST_INPUT
-    int 21h
-    
+    call create_account
     call create_account 
     
     call end_program
