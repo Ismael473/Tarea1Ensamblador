@@ -1,3 +1,4 @@
+
 .MODEL SMALL
 .STACK 100h
 
@@ -8,6 +9,20 @@
     ; ACC_HOLDER 20 bytes
     ; ACC_BAL 4 bytes
     ; ACC_STATE 1 byte
+    
+    ;---Opciones del menu ---
+    
+    op_Crear db "1. Crear cuenta"
+    op_Depos db "2. Depositar Dinero"
+    op_Retir db "3. Retirar Dinero"
+    op_Consul db "4. Consultar Saldo"
+    op_MostRepo db "5. Mostrar Reporte General"
+    op_Desac db "6. Desactivar cuenta"
+    op_Salir db "7. Salir"
+                             
+    ;------------------------                             
+    
+    
     MAX_ACC     equ 10
     ACC_SIZE    equ 27
     
@@ -22,7 +37,17 @@
     
     HOLDER_TEST_INPUT  db 21, ?, 21 dup(?)
     ACC_NUM_TEST_INPUT db 6, ?, 6 dup(?)
+    
+    
 .CODE
+
+print_menu PROC
+    mov ds, op_Crear
+    mov ah, 09h
+    lea dx, op_Crear
+    int 21h
+    
+    
 
 create_account PROC
     mov al, MAX_ACC
@@ -101,8 +126,11 @@ main:
     mov ax, @data
     mov ds, ax
     
+    call print_menu    
     call create_account
     call create_account 
     
     call end_program
-END main
+END main 
+
+
