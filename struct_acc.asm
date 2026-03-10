@@ -13,6 +13,7 @@
     ;---Opciones del menu ---
     
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
     op_Crear db "1. Crear cuenta"
     op_Depos db "2. Depositar Dinero"
     op_Retir db "3. Retirar Dinero"
@@ -21,6 +22,8 @@
     op_Desac db "6. Desactivar cuenta"
     op_Salir db "7. Salir"
 =======
+=======
+>>>>>>> Stashed changes
     op_Crear db "1. Crear cuenta\n$"
     op_Depos db "2. Depositar Dinero\n$"
     op_Retir db "3. Retirar Dinero\n$"
@@ -28,6 +31,9 @@
     op_MostRepo db "5. Mostrar Reporte General\n$"
     op_Desac db "6. Desactivar cuenta\n$"
     op_Salir db "7. Salir\n$"
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
                              
     ;------------------------                             
@@ -53,10 +59,13 @@
 
 print_menu PROC
 <<<<<<< Updated upstream
+<<<<<<< Updated upstream
     mov ds, op_Crear
     mov ah, 09h
     lea dx, op_Crear
 =======
+=======
+>>>>>>> Stashed changes
     mov ah, 09h ;comando de impresion en terminal
     lea dx, op_Crear ;offset le da la direccion de memoria al dx del mensaje
     int 21h
@@ -91,6 +100,9 @@ print_menu PROC
     
     
     mov ah, 4ch
+<<<<<<< Updated upstream
+>>>>>>> Stashed changes
+=======
 >>>>>>> Stashed changes
     int 21h
     
