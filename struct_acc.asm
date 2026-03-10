@@ -12,6 +12,7 @@
     
     ;---Opciones del menu ---
     
+<<<<<<< Updated upstream
     op_Crear db "1. Crear cuenta"
     op_Depos db "2. Depositar Dinero"
     op_Retir db "3. Retirar Dinero"
@@ -19,6 +20,15 @@
     op_MostRepo db "5. Mostrar Reporte General"
     op_Desac db "6. Desactivar cuenta"
     op_Salir db "7. Salir"
+=======
+    op_Crear db "1. Crear cuenta\n$"
+    op_Depos db "2. Depositar Dinero\n$"
+    op_Retir db "3. Retirar Dinero\n$"
+    op_Consul db "4. Consultar Saldo\n$"
+    op_MostRepo db "5. Mostrar Reporte General\n$"
+    op_Desac db "6. Desactivar cuenta\n$"
+    op_Salir db "7. Salir\n$"
+>>>>>>> Stashed changes
                              
     ;------------------------                             
     
@@ -42,9 +52,46 @@
 .CODE
 
 print_menu PROC
+<<<<<<< Updated upstream
     mov ds, op_Crear
     mov ah, 09h
     lea dx, op_Crear
+=======
+    mov ah, 09h ;comando de impresion en terminal
+    lea dx, op_Crear ;offset le da la direccion de memoria al dx del mensaje
+    int 21h
+      
+    mov ah, 09h ;comando de impresion en terminal
+    lea dx, op_Depos ;offset le da la direccion de memoria al dx del mensaje
+    int 21h
+    
+    mov ah, 09h ;comando de impresion en terminal
+    lea dx, op_Retir ;offset le da la direccion de memoria al dx del mensaje
+    int 21h
+    
+    mov ah, 09h ;comando de impresion en terminal
+    lea dx, op_Consul ;offset le da la direccion de memoria al dx del mensaje
+    int 21h
+    
+    mov ah, 09h ;comando de impresion en terminal
+    lea dx, op_MostRepo ;offset le da la direccion de memoria al dx del mensaje
+    int 21h
+    
+    mov ah, 09h ;comando de impresion en terminal
+    lea dx, op_Desac ;offset le da la direccion de memoria al dx del mensaje
+    int 21h 
+    
+    mov ah, 09h ;comando de impresion en terminal
+    lea dx, op_Salir ;offset le da la direccion de memoria al dx del mensaje
+    int 21h
+    
+    mov ah, 0Ah
+    int 21h
+    
+    
+    
+    mov ah, 4ch
+>>>>>>> Stashed changes
     int 21h
     
     
