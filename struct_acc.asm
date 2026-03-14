@@ -59,9 +59,9 @@ FindAccountByAccountNumberError db 0    ; 1 = Error. Error flag for the FindAcco
 create_account_menu_opening_message db "A continuacion, ingrese los datos de la nueva cuenta.", 0Dh,0Ah, "$"
 deposit_menu_opening_message db "Ingrese el numero de cuenta destino.", 0Dh,0Ah, "$"
 withdraw_menu_opening_message db "Ingrese el numero de cuenta de origen.", 0Dh,0Ah, "$"
-check_balance_menu_opening_message db "Ingrese el numero de cuenta a solicitar.", 0Dh,0Ah, "$"
+check_balance_menu_opening_message db "Ingrese el numero de cuenta por solicitar.", 0Dh,0Ah, "$"
 show_report_menu_opening_message db "Reporte general:", 0Dh,0Ah, "$"
-deactivate_account_menu_opening_message db "Ingrese el numero de cuenta a desactivar.", 0Dh,0Ah, "$"
+deactivate_account_menu_opening_message db "Ingrese el numero de cuenta por desactivar.", 0Dh,0Ah, "$"
 exit_opening_message db "Saliendo...", 0Dh,0Ah, "$"
 
 
@@ -70,20 +70,6 @@ current_max_balance                dw 0000h, 0000h      ; Used by FindMaxBalance
 current_min_balance                dw 0000h, 0000h      ; Used by FindMinBalanceAccount
 
 
-
-; Student input processing.
-digit_count             db 00h  ; Count the digits present in the student input.
-integer_count           db 00h  ; (how many numbers are there before . even if they're zeroes)
-                                ; (e. g.: 00.1 -> integer_count == 2; digit_count == 3)
-decimal_point_reached   db 00h  ; a 'boolean' value that indicates if the decimal point has been reached for the current student input.
-input_found_digits      dw 07h dup(00h)  ; the digits in the order they were found.
-; store the digits as they're found at (offset input_found_digits) + digit_count
-digits_inverse_power    db 00h  ; This number being 0, tells the program that the first digit is in the tens (e. g.: 90.1234)
-                                ; higher values, make the number smaller. (e. g. digits_inverse_power == 1: 9.01234)
-first_digit_offset      db 00h  ; the value of the 'iterator' of the loop at the moment the first digit of the string is found.
-; first_digit_offset is used to add a '$' at the end of the string in case the name was correct.
-; the '$' can also be added if the string is incorrect as it will be overwritten anyway.
-; Student scores. 32 bits
 
 print_newline db 0Dh,0Ah, "$"
 
@@ -104,6 +90,23 @@ main_menu_message_part_7 db "7.   Salir", 0Dh,0Ah, "$"
 create_account_menu_enter_holder db         "Digite el nombre del propietario:", 0Dh,0Ah, "$"
 create_account_menu_enter_account_number db "Digite el numero de cuenta:", 0Dh,0Ah, "$"
 create_account_menu_enter_balance db        "Digite el saldo:", 0Dh,0Ah, "$"
+
+; FindAccountByAccountNumber error print
+find_account_by_account_number_error_message db "No se encontro una cuenta con ese numero de cuenta.", 0Dh,0Ah, "$"
+
+; deposit_to_an_account prints
+deposit_to_an_account_indicate_amount db "Indique el monto por depositar.", 0Dh,0Ah, "$"
+; withdraw_from_an_account prints
+withdraw_from_an_account_indicate_amount db "Indique el monto por retirar.", 0Dh,0Ah, "$"
+; check_balance_of_an_account prints
+check_balance_of_an_account_show_amount db "El saldo de la cuenta es: $"
+
+; deactivate_an_account prints
+deactivate_an_account_success_message db "Cuenta desactivada.", 0Dh,0Ah, "$"
+
+
+
+
 
 ; Reporte Prints.   Add a newline and tab to each message?
 total_de_cuentas_activas_print db "Cuentas activas:", 0Dh,0Ah, "$"
@@ -194,6 +197,20 @@ main proc
     mov ax, @data     ; Load data segment address
     mov ds, ax        ; into DS register
 
+
+PUSH_REGISTERS MACRO
+    push ax
+    push bx
+    push cx
+    push dx
+ENDM
+
+POP_REGISTERS MACRO
+    pop dx
+    pop cx
+    pop bx
+    pop ax
+ENDM
 
 
 ; --------------------------------------- Esteban
@@ -297,40 +314,39 @@ CreateAccountMenu: ;------------------------------------------------------------
     jmp MainMenu
 
 
-
 ; al == 2
 DepositMenu:
-    mov ah, 09h
-    mov dx, offset deposit_menu_opening_message
-    int 21h
+    ; Code for depositing to an account.
+    call deposit_to_an_account
+
     jmp MainMenu
 
 ; al == 3
 WithdrawMenu:
-    mov ah, 09h
-    mov dx, offset withdraw_menu_opening_message
-    int 21h
+    ; Code for withdrawing from an account.
+    call withdraw_from_an_account
+    
     jmp MainMenu
 
 ; al == 4
 CheckBalanceMenu:
-    mov ah, 09h
-    mov dx, offset check_balance_menu_opening_message
-    int 21h
+    ; Code for checking the balance of an account.
+    call check_balance_of_an_account
+    
     jmp MainMenu
 
 ; al == 5
 ShowReportMenu:
-    mov ah, 09h
-    mov dx, offset show_report_menu_opening_message
-    int 21h
+    ; mov ah, 09h
+    ; mov dx, offset show_report_menu_opening_message
+    ; int 21h
     jmp MainMenu
     
 ; al == 6
 DeactivateAccountMenu:
-    mov ah, 09h
-    mov dx, offset deactivate_account_menu_opening_message
-    int 21h
+    ; Code for deactivating an account.
+    call deactivate_an_account
+
     jmp MainMenu
     
 ; al == 7
@@ -637,8 +653,9 @@ ConvertAccountNumberTo16 proc
     push cx
 
     mov ax, 0
-    lea si, ACC_NUM_INPUT+2   ; La direccion de memoria donde empieza el string
-    mov cx, 6                 ; Tamano del string.
+    lea si, ACC_NUM_INPUT+2     ; La direccion de memoria donde empieza el string
+    mov ch, 0
+    mov cl, byte ptr [ACC_NUM_INPUT+1]   ; Tamano del string.
 
     convert_acc_number:
     mov bl, [si]  ; Asignamos el caracter
@@ -657,6 +674,241 @@ ConvertAccountNumberTo16 proc
     pop si
     ret
 ConvertAccountNumberTo16 endp
+
+
+; PSEUDO
+;    deposit_to_an_account
+;        print("Ingrese el numero de cuenta destino.")
+;        data.account_number = int21()
+;        target_account_address = FindAccountByAccountNumber()
+;        if (data.FindAccountByAccountNumberError)
+;            print("No se encontro una cuenta con ese numero de cuenta.")
+;            jump menu
+;            data.FindAccountByAccountNumberError = 0
+;
+;        data.balance = Convert32(int21())
+;
+;        account[target_account_address].balance += data.balance
+;        return
+deposit_to_an_account proc
+    PUSH_REGISTERS
+    ; print("Ingrese el numero de la cuenta destino.")
+    mov ah, 09h
+    mov dx, offset deposit_menu_opening_message
+    int 21h
+
+    ; get the account number into the account_number buffer as a string.
+    mov ah, 0Ah
+    lea dx, ACC_NUM_INPUT ; Account number Buffer.
+    int 21h
+    call PrintNewline
+
+    ; get the offset of the account with the given account number
+    call FindAccountByAccountNumber ; returns the offset of the matching Account offset in si
+    ; continue if FindAccountByAccountNumber didn't run into an error.
+    cmp byte ptr [FINDACCOUNTBYACCOUNTNUMBERERROR], 0    ; 0 = no error ; byte ptr/word ptr is necessary for data in memory.
+        je successfully_found_account1
+        ; If it ran into an error:
+        ; print("No se encontro una cuenta con ese numero de cuenta.")
+        mov ah, 09h
+        mov dx, offset find_account_by_account_number_error_message
+        int 21h
+        mov FINDACCOUNTBYACCOUNTNUMBERERROR, 0
+        POP_REGISTERS
+        ret ; generally jumps to MainMenu (using ret mantains the stack valid)
+        successfully_found_account1:
+    push si ; save si for later.
+
+    ; get the sum to deposit as a string from the user. 
+    mov ah, 09h
+    mov dx, offset deposit_to_an_account_indicate_amount
+    int 21h 
+    mov ah, 0Ah
+    lea dx, NUMBER32_INPUT
+    int 21h 
+    call PrintNewline
+
+    call convert_32 ; get the 32 bit balance to add into dx:ax
+    pop si
+    add si, ACC_BAL ; add the offset of the balance within an account.
+    ; add to the balance at si.
+    add word ptr [si], ax ; si now holds the address of the balance to add to
+    adc word ptr [si+2], dx
+    POP_REGISTERS
+    ret
+deposit_to_an_account endp
+
+; Same code as deposit_to_an_account but substracts instead and TODO: VALIDATE THAT THERE IS ENOUGH MONEY TO WITHDRAW.
+withdraw_from_an_account proc
+    PUSH_REGISTERS
+    ; print("Ingrese el numero de la cuenta de origen.")
+    mov ah, 09h
+    mov dx, offset withdraw_menu_opening_message
+    int 21h
+
+    ; get the account number into the account_number buffer as a string.
+    mov ah, 0Ah
+    lea dx, ACC_NUM_INPUT ; Account number Buffer.
+    int 21h
+    call PrintNewline
+
+    ; get the offset of the account with the given account number
+    call FindAccountByAccountNumber ; returns the offset of the matching Account offset in si
+    ; continue if FindAccountByAccountNumber didn't run into an error.
+    cmp byte ptr [FINDACCOUNTBYACCOUNTNUMBERERROR], 0    ; 0 = no error ; byte ptr/word ptr is necessary for data in memory.
+        je successfully_found_account2
+        ; If it ran into an error:
+        ; print("No se encontro una cuenta con ese numero de cuenta.")
+        mov ah, 09h
+        mov dx, offset find_account_by_account_number_error_message
+        int 21h
+        mov FINDACCOUNTBYACCOUNTNUMBERERROR, 0
+        POP_REGISTERS
+        ret ; generally jumps to MainMenu (using ret mantains the stack valid)
+        successfully_found_account2:
+    push si ; save si for later.
+
+    ; get the sum to withdraw as a string from the user. 
+    mov ah, 09h
+    mov dx, offset withdraw_from_an_account_indicate_amount
+    int 21h 
+    mov ah, 0Ah
+    lea dx, NUMBER32_INPUT
+    int 21h 
+    call PrintNewline
+
+    call convert_32 ; get the 32 bit balance to add into dx:ax
+    pop si
+    add si, ACC_BAL ; add the offset of the balance within an account.
+    ; add to the balance at si.
+    sub word ptr [si], ax ; si now holds the address of the balance to subtract from.
+    sbb word ptr [si+2], dx
+    POP_REGISTERS
+    ret
+withdraw_from_an_account endp
+
+
+; Check balance
+; similarly to deposit and withdraw, this procedure finds the account by account number and performs an action.
+check_balance_of_an_account proc
+    PUSH_REGISTERS
+    ; print("Ingrese el numero de la cuenta por solicitar.")
+    mov ah, 09h
+    mov dx, offset check_balance_menu_opening_message
+    int 21h
+
+    ; get the account number into the account_number buffer as a string.
+    mov ah, 0Ah
+    lea dx, ACC_NUM_INPUT ; Account number Buffer.
+    int 21h
+    call PrintNewline
+
+    ; get the offset of the account with the given account number
+    call FindAccountByAccountNumber ; returns the offset of the matching Account offset in si
+    ; continue if FindAccountByAccountNumber didn't run into an error.
+    cmp byte ptr [FINDACCOUNTBYACCOUNTNUMBERERROR], 0    ; 0 = no error ; byte ptr/word ptr is necessary for data in memory.
+        je successfully_found_account3
+        ; If it ran into an error:
+        ; print("No se encontro una cuenta con ese numero de cuenta.")
+        mov ah, 09h
+        mov dx, offset find_account_by_account_number_error_message
+        int 21h
+        mov FINDACCOUNTBYACCOUNTNUMBERERROR, 0
+        POP_REGISTERS
+        ret ; generally jumps to MainMenu (using ret mantains the stack valid)
+        successfully_found_account3:
+    
+    ; print "El saldo de la cuenta es: $"
+    mov ah, 09h
+    mov dx, offset check_balance_of_an_account_show_amount
+    int 21h 
+    
+    add si, ACC_BAL ; add the offset of the balance within an account.
+    ; si now holds the address of the balance to print.
+    ; PLACEHOLDER BEHAVIOR OF PRINTING debug_0!!! TODO: PRINT THE 32 bit BALANCE AS A DECIMAL NUMBER. -------
+    mov ah, 09h
+    mov dx, offset debug_0
+    int 21h 
+    
+    
+
+    ; TODO: Insert code to print the 32 bit number at si here
+
+
+
+    POP_REGISTERS
+    ret
+check_balance_of_an_account endp
+
+
+
+
+
+
+; Similar code to deposit_to_an_account but overwrites the account's state instead of the balance.
+deactivate_an_account proc
+    PUSH_REGISTERS
+    ; print("Ingrese el numero de cuenta a desactivar.")
+    mov ah, 09h
+    mov dx, offset deactivate_account_menu_opening_message
+    int 21h
+
+    ; get the account number into the account_number buffer as a string.
+    mov ah, 0Ah
+    lea dx, ACC_NUM_INPUT ; Account number Buffer.
+    int 21h
+    call PrintNewline
+
+    ; get the offset of the account with the given account number
+    call FindAccountByAccountNumber ; returns the offset of the matching Account offset in si
+    ; continue if FindAccountByAccountNumber didn't run into an error.
+    cmp byte ptr [FINDACCOUNTBYACCOUNTNUMBERERROR], 0    ; 0 = no error ; byte ptr/word ptr is necessary for data in memory.
+        je successfully_found_account4
+        ; If it ran into an error:
+        ; print("No se encontro una cuenta con ese numero de cuenta.")
+        mov ah, 09h
+        mov dx, offset find_account_by_account_number_error_message
+        int 21h
+        mov FINDACCOUNTBYACCOUNTNUMBERERROR, 0
+        POP_REGISTERS
+        ret ; generally jumps to MainMenu (using ret mantains the stack valid)
+        successfully_found_account4:
+
+    ; print "Cuenta desactivada."
+    mov ah, 09h
+    mov dx, offset deactivate_an_account_success_message
+    int 21h 
+
+    add si, ACC_STATE ; add the offset of the state within an account.
+    ; Sobresecribir el estado de la cuenta en la direccion dada por si con inactiva (0 = inactiva, 1 = activa)
+    mov byte ptr [si], 0 ; si now holds the address of the balance to subtract from.
+    POP_REGISTERS
+    ret
+deactivate_an_account endp
+
+
+
+
+
+;push_registers proc    ; This code interferes with the logic of return because values are added to the stack.
+;    push 
+;    push ax
+;    push bx
+;    push cx
+;    push dx
+;    ret
+;push_registers endp
+;
+;pop_registers proc
+;    push dx
+;    push cx
+;    push bx
+;    push ax
+;    ret
+;pop_registers endp
+
+
+
 
 
 
