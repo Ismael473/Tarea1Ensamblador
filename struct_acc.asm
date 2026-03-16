@@ -70,7 +70,7 @@ check_balance_menu_opening_message db "Ingrese el numero de cuenta por solicitar
 show_report_menu_opening_message db "Reporte general:", 0Dh,0Ah, "$"
 deactivate_account_menu_opening_message db "Ingrese el numero de cuenta por desactivar.", 0Dh,0Ah, "$"
 exit_opening_message db "Saliendo...", 0Dh,0Ah, "$"
-
+input_error_message db "En este menu solo se pueden ingresar numeros del 1 al 7.", 0Dh, 0Ah, "$";
 
 
 current_max_balance                dw 0000h, 0000h      ; Used by FindMaxBalanceAccount
@@ -307,6 +307,9 @@ MainMenu:
     jmp Exit
     ExitSkipJump:
     
+    mov ah, 09h
+    mov dx, offset input_error_message
+    int 21h
     jmp MainMenu          ; invalid input, repeat
 
 ; Define behaviour of each 'menu'
