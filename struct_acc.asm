@@ -34,10 +34,17 @@ next_menu                 db 00h            ; This is a byte that depends on the
     ACC_STATE   equ 27
     
     ; Variables para el manejo de cuentas
-    ACCOUNTS    db ACC_SIZE * MAX_ACC dup(?) ; Define el espacio de memoria para diez cuentas.
-    ACC_COUNT   db 0 ; Contador de cuentas 
+    ACCOUNTS       db ACC_SIZE * MAX_ACC dup(?) ; Define el espacio de memoria para diez cuentas.
+    ACC_COUNT      db 0 ; Contador de cuentas    
+    ACTIVE_ACC     db 0
+    INACTIVE_ACC   db 0 
                    
-    CURRENT_ACC dw ? ; Cuenta seleccionada
+    CURRENT_ACC  dw ? ; Direccion de memoria de la cuenta seleccionada              
+    MAX_BAL_ACC  dw ?
+    MIN_BAL_ACC  dw ?
+    
+    BANK_BAL     dw 0000h, 0000h
+
     
     HOLDER_INPUT        db 21, ?, 21 dup(?)
     ACC_NUM_INPUT       db 6, ?, 6 dup('0')
@@ -90,6 +97,9 @@ main_menu_message_part_7 db "7.   Salir", 0Dh,0Ah, "$"
 create_account_menu_enter_holder db         "Digite el nombre del propietario:", 0Dh,0Ah, "$"
 create_account_menu_enter_account_number db "Digite el numero de cuenta:", 0Dh,0Ah, "$"
 create_account_menu_enter_balance db        "Digite el saldo:", 0Dh,0Ah, "$"
+create_account_menu_already_exists db       "El numero de cuenta ya existe, intentalo con otro...", 0Dh,0Ah, "$"
+create_account_menu_succesfully_created db  "La cuenta ha sido creada correctamente.", 0Dh,0Ah, "$" 
+create_account_menu_limit_exceeded db       "No hay espacio suficiente para crear otra cuenta, intentalo de nuevo mas tarde..."
 
 ; FindAccountByAccountNumber error print
 find_account_by_account_number_error_message db "No se encontro una cuenta con ese numero de cuenta.", 0Dh,0Ah, "$"
@@ -109,13 +119,13 @@ deactivate_an_account_success_message db "Cuenta desactivada.", 0Dh,0Ah, "$"
 
 
 ; Reporte Prints.   Add a newline and tab to each message?
-total_de_cuentas_activas_print db "Cuentas activas:", 0Dh,0Ah, "$"
-total_de_cuentas_inactivas_print db "Cuentas inactivas:", 0Dh,0Ah, "$"
-saldo_total_del_banco_print db "Saldo total del banco:", 0Dh,0Ah, "$"
-cuenta_con_mayor_saldo_print db "Cuenta con mayor saldo:", 0Dh,0Ah, "$"
-cuenta_con_menor_saldo_print db "Cuenta con menor saldo:", 0Dh,0Ah, "$"
+total_de_cuentas_activas_print db "Cuentas activas: $"
+total_de_cuentas_inactivas_print db "Cuentas inactivas: $"
+saldo_total_del_banco_print db "Saldo total del banco: $"
+cuenta_con_mayor_saldo_print db "Cuenta con mayor saldo: $"
+cuenta_con_menor_saldo_print db "Cuenta con menor saldo: $"
 
-
+ZERO_ACCOUNTS    db "No hay ninguna cuenta creada por el momento...", 0Dh,0Ah, "$"
 
 ; Decimal Number Print
 decimal_to_print db "000000.0000$"
@@ -337,9 +347,12 @@ CheckBalanceMenu:
 
 ; al == 5
 ShowReportMenu:
-    ; mov ah, 09h
-    ; mov dx, offset show_report_menu_opening_message
-    ; int 21h
+    mov ah, 09h
+    mov dx, offset show_report_menu_opening_message
+    int 21h
+    
+    call show_report
+    
     jmp MainMenu
     
 ; al == 6
@@ -379,10 +392,141 @@ Divide32By16 proc
     ret
 Divide32By16 endp
 
-PrintDecimalFrom32BitFixedPoint proc    ; This name may be so long is truncated by assembler
+; El numero N de 32 bits se recibe en DX:AX
+; N/10 vuelve en DX:AX
+   
+Divide32By10 proc       ; Source: https://stackoverflow.com/questions/69083041/trying-to-display-a-32bit-number-in-assembly-8086-32bit
+    mov     cx,ax         
+    mov     ax,dx          ;First divide the HighDividend
+    xor     dx,dx          ;Setup for division DX:AX / BX
+    div     bx             ; -> AX is HighQuotient, Remainder is re-used
+    xchg    ax,cx          ;Temporarily move it to CX restoring LowDividend
+    div     bx             ; -> AX is LowQuotient, Remainder DX=[0,9]
+    mov     si, dx
+    mov     dx,cx          ;Build true 32-bit quotient in DX:AX
+    
+    ret   
+Divide32By10 endp    
 
+; El numero N de 32 bits se recibe en DX:AX
+   
+PrintDecimalFrom32BitFixedPoint proc    ; This name may be so long is truncated by assembler
+    PUSH_REGISTERS
+    mov di, 0          ; Contador de digitos del numero N
+    mov bx, 10         ; Divisor
+    
+stack_loop:
+    call Divide32By10  ; Divide por diez N y guarda el residuo en SI
+    push si            ; Guardamos en el stack el numero para leerlo de nuevo luego.
+    
+    inc di             ; Incrementa el numero de digitos de N
+    
+    mov cx,dx          ; Temporalmente guardamos la parte alta de N (esto si es un numero que cabe en 16 bits, pues al usar el OR se escriben valores en DX)
+    or cx, ax          ; Revisar si la parte alta y baja de N son iguales a cero.
+    jnz stack_loop     ; Brincar de nuevo al loop si no son cero las dos partes.
+
+itneed_zeros?:
+    cmp di, 5          ; Para numeros con un numero de digitos < 5 debemos agregar ceros adelante para representar el punto decimal.
+    jb add_zeros       ; Si hacen falta ceros, los agregamos
+    
+    mov cx, 0          
+    
+    mov bx, di         ; Cuantos numeros debo de contar antes de agregar el punto decimal?
+    sub bx, 4          ; ((Si el numero tiene 6 digitos, el punto decimal debe de ir en el
+                       ; segundo numero que ha imprimido)) <--- Asi es como se comportan estas dos lineas.
+    mov ah, 02h        ; Imprimir el simbolo de dolar.
+    mov dl, '$'
+    int 21h
+    
+    jmp print32_number
+
+add_zeros:
+    mov cx, 5          ; Calcula cuantos ceros debe de agregar al stack
+    sub cx, di
+    
+add_zeros_loop:
+    push 0             
+    inc di             ; Incrementamos el numero de digitos
+    loop add_zeros_loop
+    
+    jmp itneed_zeros?      
+
+print32_number:
+    cmp cx, bx         ; Ya se debe de imprimir el punto?
+    je add_fixed_point
+    
+    cmp cx, di         ; Ya terminamos de imprimir el numero?
+    je return_print32
+    
+    pop dx             ; Sacamos el digito correspondiente del stack
+
+    add dx, '0'        ; Se imprime el numero
+    int 21h
+    
+    inc cx
+    
+    jmp print32_number
+    
+
+add_fixed_point:
+    mov ah, 02h     ; Imprimir el punto
+    mov dl, '.'
+    int 21h
+    
+    mov bx, 0FFFFh  ; Valor dummy para que no vuelva a imprimir otro punto.
+    
+    jmp print32_number
+    
+return_print32:
+    POP_REGISTERS    
     ret
+    
 PrintDecimalFrom32BitFixedPoint endp
+
+
+; Recibe el numero de 16 bits en AX
+
+PrintDecimalFrom16Bit proc
+    PUSH_REGISTERS 
+    
+    mov cx, 10
+    mov di, 0
+    
+div16b_loop:
+    xor dx, dx
+    div cx
+    
+    push dx
+    
+    inc di
+    
+    cmp ax, 0
+    jne div16b_loop
+
+print16_loop:
+    cmp di, 0
+    je return_print16
+    
+    pop dx
+    
+    add dl, '0'
+    
+    push ax
+    
+    mov ah, 02h
+    int 21h
+    
+    pop ax
+    
+    dec di
+    jmp print16_loop
+    
+return_print16:
+    POP_REGISTERS
+    ret
+
+PrintDecimalFrom16Bit endp
+
 
 ; Test function
 ; Prints Hex of dx:ax
@@ -588,20 +732,351 @@ copy_acc_holder:
     mov [si+ACC_BAL+2], dx
     
     inc ACC_COUNT
+    
+    call PrintNewline
+    
+    mov ah, 09h
+    mov dx, offset create_account_menu_succesfully_created
+    int 21h 
+    
     ret    
      
 acc_limit:
+    call PrintNewline
+    mov ah, 09h
+    mov dx, offset create_account_menu_limit_exceeded
+    int 21h 
     ret
     
 duplicated_acc:
+    call PrintNewline
+    mov ah, 09h
+    mov dx, offset create_account_menu_already_exists
+    int 21h 
     ret
         
 create_account ENDP
+; <---------------------------  Guillermo --------------------------------->
+; Salida: en MAX_BAL_ACC quedara la direccion de memoria de la cuenta
+; con el balance mas grande
+; Esta funcion realiza una busqueda lineal comparando los balances de cada cuenta.
+find_max_bal PROC
+    push ax
+    push bx
+    push cx
+    push dx
+    push di
+    
+    ; Inicializar registros temporales
+    mov ax, 0              ; Parte baja del maximo actual
+    mov bx, 0
+    mov cx, 0
+    mov dx, 0              ; Parte alta del maximo actual
+    
+    lea si, ACCOUNTS       ; SI apunta al primer registro de cuenta
+    mov dl, ACC_COUNT      ; Cargar cantidad de cuentas
+    mov di, dx             ; DI será contador del loop
+    
+    mov dl, 0              ; Limpiar DL
+    
+find_max_loop:
+    cmp di, 0              ; Ya recorrimos todas las cuentas?
+    je exit_fmax
+    
+    ; Cargar saldo actual de la cuenta
+    mov cx, [si+ACC_BAL]       ; Parte baja
+    mov bx, [si+ACC_BAL+2]     ; Parte alta
+    
+    ; Comparar primero parte alta
+    
+    cmp bx, dx 
+    jg set_temp_max        ; Si parte alta es mayor, nuevo máximo
+    jl next_acc            ; Si es menor, pasar siguiente cuenta
+    
+    ; Si parte alta es igual, comparar parte baja
+    
+    cmp cx, ax
+    jg set_temp_max        ; Si parte baja es mayor, nuevo máximo
+    
+    dec di 
+    add si, ACC_SIZE       ; Avanzar siguiente cuenta
+    jmp find_max_loop
 
-end_program PROC
-    mov ax, 4C00h
+set_temp_max:
+    mov MAX_BAL_ACC, si    ; Guardar direccion de la cuenta máxima
+    
+    mov dx, bx             ; Actualizar parte alta máxima
+    mov ax, cx             ; Actualizar parte baja máxima
+    
+    dec di
+    add si, ACC_SIZE
+    jmp find_max_loop
+
+next_acc:
+    dec di
+    add si, ACC_SIZE
+    jmp find_max_loop     
+
+exit_fmax:
+    pop di   
+    pop dx
+    pop cx
+    pop bx
+    pop ax
+    
+    ret
+    
+find_max_bal ENDP 
+
+find_min_bal PROC
+    push ax
+    push bx
+    push cx
+    push dx
+    push di
+    
+    ; Inicializar registros temporales
+    mov bx, 0
+    mov cx, 0
+    
+    lea si, ACCOUNTS       ; SI apunta al primer registro
+    mov dl, ACC_COUNT
+    xor dh, dh
+    mov di, dx             ; DI contador
+    
+    mov dl, 0
+    
+    ; Inicializar minimo con valor maximo posible (FFFF:FFFF)
+    mov ax, 0FFFFh         ; Parte baja minimo actual
+    mov dx, 0FFFFh         ; Parte alta manimo actual
+    
+find_min_loop:
+    cmp di, 0
+    je exit_fmin
+    
+    ; Cargar saldo actual
+    mov cx, [si+ACC_BAL]       ; Parte baja
+    mov bx, [si+ACC_BAL+2]     ; Parte alta
+    
+    ; Comparar parte alta
+    
+    cmp bx, dx 
+    jb set_temp_min        ; Si es menor, nuevo minimo
+    ja next_acc_fmin       ; Si es mayor, ignorar
+    
+    ; Si parte alta igual, comparar parte baja
+    
+    cmp cx, ax
+    jb set_temp_min
+    
+    dec di 
+    add si, ACC_SIZE
+    jmp find_min_loop
+
+set_temp_min:
+    mov MIN_BAL_ACC, si    ; Guardar direccion de minimo
+    
+    mov dx, bx             ; Actualizar parte alta minima
+    mov ax, cx             ; Actualizar parte baja minima
+    
+    dec di
+    add si, ACC_SIZE
+    jmp find_min_loop
+
+next_acc_fmin:
+    dec di
+    add si, ACC_SIZE
+    jmp find_min_loop     
+
+exit_fmin:
+    pop di   
+    pop dx
+    pop cx
+    pop bx
+    pop ax
+    
+    ret
+    
+find_min_bal ENDP
+
+sum_all_balances PROC
+    ; Inicializar acumulador de suma
+    mov ax, 0              ; Parte baja suma total
+    mov bx, 0
+    mov cx, 0
+    mov dx, 0              ; Parte alta suma total
+    
+    mov dl, ACC_COUNT
+    
+    mov di, dx             ; DI contador
+    xor dl, dl
+    lea si, ACCOUNTS       ; SI apunta al primer registro
+    
+sum_loop:
+    cmp di, 0
+    je sum_return
+    
+    ; Cargar saldo de cuenta actual
+    mov bx, [si+ACC_BAL]      ; Parte baja
+    mov cx, [si+ACC_BAL+2]    ; Parte alta
+    
+    ; Sumar 32 bits: low con ADD, high con ADC
+    add ax, bx
+    adc dx, cx
+    
+    add si, ACC_SIZE          ; Siguiente cuenta
+    
+    dec di
+    
+    jmp sum_loop
+
+sum_return:
+    ; Guardar suma total en BANK_BAL
+    mov [BANK_BAL], ax 
+    mov [BANK_BAL+2], dx
+    ret
+    
+sum_all_balances ENDP
+
+active_inactive_count PROC
+    PUSH_REGISTERS
+    
+    xor ax, ax
+    
+    ; Reiniciar contadores
+    mov ACTIVE_ACC, al
+    mov INACTIVE_ACC, al
+    
+    xor cx, cx
+    
+    mov cl, ACC_COUNT
+    lea si, ACCOUNTS
+    
+count_loop:
+    cmp cx, 0
+    je return_count
+    
+    mov al, [si+ACC_STATE]    ; Leer estado de cuenta
+    
+    cmp al, 1
+    je inc_active_count
+    
+    ; Cuenta inactiva
+    inc INACTIVE_ACC
+    dec cx
+    
+    add si, ACC_SIZE
+    jmp count_loop
+    
+inc_active_count:
+    ; Cuenta activa
+    inc ACTIVE_ACC
+    dec cx
+    
+    add si, ACC_SIZE
+    jmp count_loop
+    
+return_count:
+    POP_REGISTERS
+    ret
+active_inactive_count ENDP
+
+show_report PROC
+    push ax
+    push dx
+    push si
+    
+    mov ax, 0
+    mov al, ACC_COUNT
+    
+    ; Si no hay cuentas, mostrar mensaje
+    cmp al, 0
+    je zero_accounts_found
+    
+    ; Contar activas/inactivas
+    call active_inactive_count 
+    
+    ; Mostrar activas
+    mov ah, 09h
+    mov dx, offset total_de_cuentas_activas_print
     int 21h
-end_program ENDP
+    
+    xor ax, ax
+    mov al, ACTIVE_ACC
+    
+    call PrintDecimalFrom16Bit
+    call PrintNewline 
+     
+    ; Mostrar inactivas
+    mov ah, 09h
+    mov dx, offset total_de_cuentas_inactivas_print
+    int 21h
+    
+    xor ax, ax
+    mov al, INACTIVE_ACC
+    
+    call PrintDecimalFrom16Bit
+    call PrintNewline
+    
+    ; Buscar cuenta máxima y mínima
+    call find_max_bal
+    call find_min_bal
+    
+    ; Mostrar cuenta maxima
+    mov si, MAX_BAL_ACC
+
+    mov ah, 09h
+    mov dx, offset cuenta_con_mayor_saldo_print
+    int 21h
+    
+    lea dx, si+ACC_HOLDER
+    int 21h
+    
+    call PrintNewline
+    
+    ; Mostrar cuenta minima
+    mov si, MIN_BAL_ACC
+    
+    mov ah, 09h
+    mov dx, offset cuenta_con_menor_saldo_print
+    int 21h
+    
+    lea dx, si+ACC_HOLDER
+    int 21h
+    
+    call PrintNewline
+    
+    ; Mostrar saldo total banco
+    mov ah, 09h
+    mov dx, offset saldo_total_del_banco_print
+    int 21h
+    
+    call sum_all_balances
+    
+    mov ax, [BANK_BAL]
+    mov bx, [BANK_BAL+2]
+    
+    call PrintDecimalFrom32BitFixedPoint
+       
+    call PrintNewline
+     
+    jmp exit_report 
+
+zero_accounts_found:
+    mov ah, 09h
+    mov dx, offset ZERO_ACCOUNTS
+    int 21h
+    
+exit_report:
+    pop si
+    pop dx
+    pop ax
+    
+    ret     
+     
+show_report ENDP
+
+; <---------------------------  Guillermo --------------------------------->
 
 PrintNewline proc
     push ax
@@ -824,17 +1299,11 @@ check_balance_of_an_account proc
     int 21h 
     
     add si, ACC_BAL ; add the offset of the balance within an account.
-    ; si now holds the address of the balance to print.
-    ; PLACEHOLDER BEHAVIOR OF PRINTING debug_0!!! TODO: PRINT THE 32 bit BALANCE AS A DECIMAL NUMBER. -------
-    mov ah, 09h
-    mov dx, offset debug_0
-    int 21h 
     
+    mov ax, [si]
+    mov dx, [si+2]
     
-
-    ; TODO: Insert code to print the 32 bit number at si here
-
-
+    call PrintDecimalFrom32BitFixedPoint
 
     POP_REGISTERS
     ret
