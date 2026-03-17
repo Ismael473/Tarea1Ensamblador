@@ -48,12 +48,14 @@ next_menu                 db 00h            ; This is a byte that depends on the
     
     HOLDER_INPUT        db 21, ?, 21 dup(?)
     ACC_NUM_INPUT       db 6, ?, 6 dup('0')
-    NUMBER32_INPUT      db 11, ?, 11 dup(?)
+    NUMBER32_INPUT      db 12, ?, 12 dup(?)
 ; --------------------------------------- Gillermo
 
 
-
+;Flag verification
 FindAccountByAccountNumberError db 0    ; 1 = Error. Error flag for the FindAccountByAccountNumber procedure.
+numberVerification16Flag db 0           ; 
+numberVerification32Flag db 0           ;
 
 ; Menu names (jumps)
 ; 1 CreateAccountMenu
@@ -99,7 +101,8 @@ create_account_menu_enter_account_number db "Digite el numero de cuenta:", 0Dh,0
 create_account_menu_enter_balance db        "Digite el saldo:", 0Dh,0Ah, "$"
 create_account_menu_already_exists db       "El numero de cuenta ya existe, intentalo con otro...", 0Dh,0Ah, "$"
 create_account_menu_succesfully_created db  "La cuenta ha sido creada correctamente.", 0Dh,0Ah, "$" 
-create_account_menu_limit_exceeded db       "No hay espacio suficiente para crear otra cuenta, intentalo de nuevo mas tarde..."
+create_account_menu_limit_exceeded db       "No hay espacio suficiente para crear otra cuenta, intentalo de nuevo mas tarde...", 0Dh, 0Ah, "$"
+create_account_menu_wrong_format db         "El numero que ingreso no esta en el formato correcto" , 0Dh, 0Ah, "$"
 
 ; FindAccountByAccountNumber error print
 find_account_by_account_number_error_message db "No se encontro una cuenta con ese numero de cuenta.", 0Dh,0Ah, "$"
@@ -114,7 +117,8 @@ check_balance_of_an_account_show_amount db "El saldo de la cuenta es: $"
 ; deactivate_an_account prints
 deactivate_an_account_success_message db "Cuenta desactivada.", 0Dh,0Ah, "$"
 
-
+;Overdraft while withdrawing
+overdraft_error_message db "No se puede extraer ese monto debido a sobregiro de la cuenta.", 0Dh, 0Ah, "$"
 
 
 
@@ -138,66 +142,6 @@ debug_1 db "CHECKPOINT 1", 0Dh,0Ah, "$"
 debug_2 db "CHECKPOINT 2", 0Dh,0Ah, "$"
 debug_5 db "CHECKPOINT 3", 0Dh,0Ah, "$"
 debug_small db ".-", "$"
-
-
-
-
-; --------------------------------------- Ismael
-;.DATA
-;    ; Definiciones simbolicas para la estructura de datos
-;    ; Indican el tamano en bytes de cada dato (para navegar la estructura)
-;    ; ACC_NUM 2 bytes
-;    ; ACC_HOLDER 20 bytes
-;    ; ACC_BAL 4 bytes
-;    ; ACC_STATE 1 byte
-;    
-;    ;---Opciones del menu ---
-;    
-;<<<<<<< Updated upstream
-;<<<<<<< Updated upstream
-;    op_Crear db "1. Crear cuenta"
-;    op_Depos db "2. Depositar Dinero"
-;    op_Retir db "3. Retirar Dinero"
-;    op_Consul db "4. Consultar Saldo"
-;    op_MostRepo db "5. Mostrar Reporte General"
-;    op_Desac db "6. Desactivar cuenta"
-;    op_Salir db "7. Salir"
-;=======
-;=======
-;>>>>>>> Stashed changes
-;    op_Crear db "1. Crear cuenta\n$"
-;    op_Depos db "2. Depositar Dinero\n$"
-;    op_Retir db "3. Retirar Dinero\n$"
-;    op_Consul db "4. Consultar Saldo\n$"
-;    op_MostRepo db "5. Mostrar Reporte General\n$"
-;    op_Desac db "6. Desactivar cuenta\n$"
-;    op_Salir db "7. Salir\n$"
-;<<<<<<< Updated upstream
-;>>>>>>> Stashed changes
-;=======
-;>>>>>>> Stashed changes
-;                             
-;    ;------------------------                             
-;    
-;    
-;    MAX_ACC     equ 10
-;    ACC_SIZE    equ 27
-;    
-;    ACC_NUM     equ 0
-;    ACC_HOLDER  equ 2
-;    ACC_BAL     equ 22
-;    ACC_STATE   equ 26
-;    
-;    ; Variables para el manejo de cuentas
-;    ACCOUNTS    db ACC_SIZE * MAX_ACC dup(?) ; Define el espacio de memoria para diez cuentas.
-;    ACC_COUNT   db 0 ; Contador de cuentas
-;    
-;    HOLDER_TEST_INPUT  db 21, ?, 21 dup(?)
-;    ACC_NUM_TEST_INPUT db 6, ?, 6 dup(?)
-;    
-;
-
-
 
 
 
@@ -545,28 +489,6 @@ PrintHexFrom32Bit endp
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 ; --------------------------------------- Gillermo
     
 ; En number32_input debe de estar el numero
@@ -625,6 +547,89 @@ ExitConvertLoop:
     
 convert_32 ENDP
 
+number_verification32 PROC
+    push ax
+    push cx
+    push dx
+    push si
+    
+      
+    lea si, NUMBER32_INPUT
+    mov cx, 0 
+    mov numberVerification32Flag, cl                     
+    mov cl, [si+1]
+    lea si, NUMBER32_INPUT + 2
+                               
+number_verification32_loop:  
+    mov dl, [si]
+    cmp dl, '.'
+    je  skip_point
+    sub dl, '0'
+    cmp dl, 0
+    jl  number_verification32_flag 
+    cmp dl, 9
+    jg  number_verification32_flag
+    inc si
+    loop number_verification32_loop
+    jmp number_verification32_return
+    
+    
+number_verification32_flag:
+    mov al, 1
+    mov numberVerification32Flag, al
+   
+number_verification32_return:
+    pop si
+    pop dx
+    pop cx
+    pop ax
+    
+    ret 
+skip_point:
+    inc si
+    loop number_verification32_loop
+number_verification32 ENDP
+
+
+number_verification16 PROC
+    push ax
+    push cx
+    push dx
+    push si
+    
+      
+    lea si, ACC_NUM_INPUT
+    mov cx, 0 
+    mov numberVerification16Flag, cl                     
+    mov cl, [si+1]
+    lea si, ACC_NUM_INPUT + 2
+                               
+number_verification16_loop:  
+    mov dl, [si]
+    sub dl, '0'
+    cmp dl, 0
+    jl  number_verification16_flag 
+    cmp dl, 9
+    jg  number_verification16_flag
+    inc si
+    loop number_verification16_loop
+    jmp number_verification16_return
+    
+    
+number_verification16_flag:
+    mov al, 1
+    mov numberVerification16Flag, al
+   
+number_verification16_return:
+    pop si
+    pop dx
+    pop cx
+    pop ax
+    
+    ret 
+
+number_verification16 ENDP
+ 
 create_account PROC
     mov al, MAX_ACC
     cmp ACC_COUNT, al    
@@ -648,7 +653,11 @@ create_account PROC
     int 21h    
     mov ah, 0Ah
     lea dx, ACC_NUM_INPUT ; Account number Buffer.
-    int 21h    
+    int 21h
+    call number_verification16
+    mov al, numberVerification16Flag
+    cmp al, 1
+    je  number_verification_wrong_format
     call PrintNewline
 
     ; Get account balance.
@@ -658,6 +667,10 @@ create_account PROC
     mov ah, 0Ah
     lea dx, NUMBER32_INPUT
     int 21h 
+    call number_verification32
+    mov al, numberVerification32Flag
+    cmp al, 1
+    je number_verification_wrong_format
     call PrintNewline
 
     xor ax, ax ; Limpiar registros
@@ -756,8 +769,16 @@ duplicated_acc:
     mov ah, 09h
     mov dx, offset create_account_menu_already_exists
     int 21h 
+    ret    
+    
+number_verification_wrong_format:
+    call PrintNewline
+    mov ah, 09h
+    mov dx, offset create_account_menu_wrong_format 
+    int 21h
     ret
-        
+    
+            
 create_account ENDP
 ; <---------------------------  Guillermo --------------------------------->
 ; Salida: en MAX_BAL_ACC quedara la direccion de memoria de la cuenta
@@ -1021,7 +1042,7 @@ show_report PROC
     call PrintDecimalFrom16Bit
     call PrintNewline
     
-    ; Buscar cuenta máxima y mínima
+    ; Buscar cuenta maxima y minima
     call find_max_bal
     call find_min_bal
     
@@ -1180,6 +1201,15 @@ deposit_to_an_account proc
     lea dx, ACC_NUM_INPUT ; Account number Buffer.
     int 21h
     call PrintNewline
+    call number_verification16
+    mov al, numberVerification16Flag
+    cmp al, 1
+    je  deposit_verification_wrong_format_without_pop
+    call PrintNewline
+
+
+    
+    
 
     ; get the offset of the account with the given account number
     call FindAccountByAccountNumber ; returns the offset of the matching Account offset in si
@@ -1205,6 +1235,12 @@ deposit_to_an_account proc
     lea dx, NUMBER32_INPUT
     int 21h 
     call PrintNewline
+    call PrintNewline
+    call number_verification32
+    mov al, numberVerification32Flag
+    cmp al, 1
+    je  deposit_verification_wrong_format
+    call PrintNewline
 
     call convert_32 ; get the 32 bit balance to add into dx:ax
     pop si
@@ -1212,6 +1248,25 @@ deposit_to_an_account proc
     ; add to the balance at si.
     add word ptr [si], ax ; si now holds the address of the balance to add to
     adc word ptr [si+2], dx
+    jmp deposit_return
+    
+
+deposit_verification_wrong_format:
+    pop si
+    call PrintNewline
+    mov ah, 09h
+    mov dx, offset create_account_menu_wrong_format 
+    int 21h
+    jmp deposit_return
+    
+deposit_verification_wrong_format_without_pop:
+    call PrintNewline
+    mov ah, 09h
+    mov dx, offset create_account_menu_wrong_format 
+    int 21h
+    
+
+deposit_return:
     POP_REGISTERS
     ret
 deposit_to_an_account endp
@@ -1259,8 +1314,30 @@ withdraw_from_an_account proc
     pop si
     add si, ACC_BAL ; add the offset of the balance within an account.
     ; add to the balance at si.
+    
+    mov cx, [si+2] 
+    mov bx, [si]
+    
+    ;cmp cx, dx
+    ;jl  overdraft
+    ;cmp bx, ax
+    
+    sub bx, ax
+    sbb cx, dx
+    js  overdraft
+    
     sub word ptr [si], ax ; si now holds the address of the balance to subtract from.
     sbb word ptr [si+2], dx
+    
+    jmp skip_overdraft
+    
+    overdraft:
+    mov ah, 09h
+    mov dx, offset overdraft_error_message
+    int 21h
+    
+    skip_overdraft:
+    
     POP_REGISTERS
     ret
 withdraw_from_an_account endp
@@ -1357,44 +1434,6 @@ deactivate_an_account proc
     POP_REGISTERS
     ret
 deactivate_an_account endp
-
-
-
-
-
-;push_registers proc    ; This code interferes with the logic of return because values are added to the stack.
-;    push 
-;    push ax
-;    push bx
-;    push cx
-;    push dx
-;    ret
-;push_registers endp
-;
-;pop_registers proc
-;    push dx
-;    push cx
-;    push bx
-;    push ax
-;    ret
-;pop_registers endp
-
-
-
-
-
-
-;main:
-;    mov ax, @data
-;    mov ds, ax
-;    
-;    call create_account
-;    call create_account 
-;    
-;    call end_program
-;END main
-
-
 
 
 
