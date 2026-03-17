@@ -1284,6 +1284,12 @@ withdraw_from_an_account proc
     lea dx, ACC_NUM_INPUT ; Account number Buffer.
     int 21h
     call PrintNewline
+    call number_verification16
+    mov al, numberVerification16Flag
+    cmp al, 1
+    je  withdraw_verification_wrong_format_without_pop
+    call PrintNewline
+    
 
     ; get the offset of the account with the given account number
     call FindAccountByAccountNumber ; returns the offset of the matching Account offset in si
@@ -1309,6 +1315,11 @@ withdraw_from_an_account proc
     lea dx, NUMBER32_INPUT
     int 21h 
     call PrintNewline
+    call number_verification32
+    mov al, numberVerification32Flag
+    cmp al, 1
+    je  withdraw_verification_wrong_format
+    call PrintNewline
 
     call convert_32 ; get the 32 bit balance to add into dx:ax
     pop si
@@ -1329,17 +1340,35 @@ withdraw_from_an_account proc
     sub word ptr [si], ax ; si now holds the address of the balance to subtract from.
     sbb word ptr [si+2], dx
     
-    jmp skip_overdraft
+    jmp withdraw_return
     
-    overdraft:
+overdraft:
     mov ah, 09h
     mov dx, offset overdraft_error_message
     int 21h
+    jmp withdraw_return
     
-    skip_overdraft:
     
+withdraw_verification_wrong_format:
+    pop si
+    call PrintNewline
+    mov ah, 09h
+    mov dx, offset create_account_menu_wrong_format 
+    int 21h
+    jmp withdraw_return
+    
+withdraw_verification_wrong_format_without_pop:
+    call PrintNewline
+    mov ah, 09h
+    mov dx, offset create_account_menu_wrong_format 
+    int 21h
+    
+
+withdraw_return:
     POP_REGISTERS
     ret
+    
+    
 withdraw_from_an_account endp
 
 
@@ -1356,6 +1385,11 @@ check_balance_of_an_account proc
     mov ah, 0Ah
     lea dx, ACC_NUM_INPUT ; Account number Buffer.
     int 21h
+    call PrintNewline
+    call number_verification16
+    mov al, numberVerification16Flag
+    cmp al, 1
+    je  check_verification_wrong_format_without_pop
     call PrintNewline
 
     ; get the offset of the account with the given account number
@@ -1384,9 +1418,19 @@ check_balance_of_an_account proc
     mov dx, [si+2]
     
     call PrintDecimalFrom32BitFixedPoint
+    jmp check_return
+    
+check_verification_wrong_format_without_pop:
+    call PrintNewline
+    mov ah, 09h
+    mov dx, offset create_account_menu_wrong_format 
+    int 21h
+    
 
+check_return:
     POP_REGISTERS
     ret
+    
 check_balance_of_an_account endp
 
 
@@ -1406,6 +1450,11 @@ deactivate_an_account proc
     mov ah, 0Ah
     lea dx, ACC_NUM_INPUT ; Account number Buffer.
     int 21h
+    call PrintNewline
+    call number_verification16
+    mov al, numberVerification16Flag
+    cmp al, 1
+    je  deactivate_verification_wrong_format_without_pop
     call PrintNewline
 
     ; get the offset of the account with the given account number
@@ -1431,6 +1480,16 @@ deactivate_an_account proc
     add si, ACC_STATE ; add the offset of the state within an account.
     ; Sobresecribir el estado de la cuenta en la direccion dada por si con inactiva (0 = inactiva, 1 = activa)
     mov byte ptr [si], 0 ; si now holds the address of the balance to subtract from.
+    jmp deactivate_return
+
+deactivate_verification_wrong_format_without_pop:
+    call PrintNewline
+    mov ah, 09h
+    mov dx, offset create_account_menu_wrong_format 
+    int 21h
+    
+
+deactivate_return:
     POP_REGISTERS
     ret
 deactivate_an_account endp
