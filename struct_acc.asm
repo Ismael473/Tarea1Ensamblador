@@ -19,8 +19,8 @@ next_menu                 db 00h            ; This is a byte that depends on the
 
 ; --------------------------------------- Gillermo
 ;.DATA
-    ; Definiciones simbolicas para la estructura de datos
-    ; Indican el tamano en bytes de cada dato (para navegar la estructura)
+    ; Symbolic definitions for the data structure
+    ; This specifies the byte size of each data element (for the movement in the data structure)
     ; ACC_NUM 2 bytes
     ; ACC_HOLDER 20 bytes
     ; ACC_BAL 4 bytes
@@ -33,13 +33,13 @@ next_menu                 db 00h            ; This is a byte that depends on the
     ACC_BAL     equ 23
     ACC_STATE   equ 27
     
-    ; Variables para el manejo de cuentas
-    ACCOUNTS       db ACC_SIZE * MAX_ACC dup(?) ; Define el espacio de memoria para diez cuentas.
-    ACC_COUNT      db 0 ; Contador de cuentas    
+    ; Account management variables.
+    ACCOUNTS       db ACC_SIZE * MAX_ACC dup(?) ; Saves the space in memory for 10 accounts.
+    ACC_COUNT      db 0 ; Account counter.
     ACTIVE_ACC     db 0
     INACTIVE_ACC   db 0 
                    
-    CURRENT_ACC  dw ? ; Direccion de memoria de la cuenta seleccionada              
+    CURRENT_ACC  dw ? ; Memory address of the selected account.
     MAX_BAL_ACC  dw ?
     MIN_BAL_ACC  dw ?
     
@@ -102,7 +102,7 @@ main_menu_message_part_5 db "5.   Mostrar reporte general", 0Dh,0Ah, "$"
 main_menu_message_part_6 db "6.   Desactivar una cuenta", 0Dh,0Ah, "$"
 main_menu_message_part_7 db "7.   Salir", 0Dh,0Ah, "$"
 
-; Crear cuenta prints.
+; Create account prints.
 create_account_menu_enter_holder db         "Digite el nombre del propietario:", 0Dh,0Ah, "$"
 create_account_menu_enter_account_number db "Digite el numero de cuenta:", 0Dh,0Ah, "$"
 create_account_menu_enter_balance db        "Digite el saldo:", 0Dh,0Ah, "$"
@@ -350,8 +350,8 @@ Divide32By16 proc
     ret
 Divide32By16 endp
 
-; El numero N de 32 bits se recibe en DX:AX
-; N/10 vuelve en DX:AX
+; The 32 bits number N it's received in DX:AX
+; N/10 comes back in DX:AX
    
 Divide32By10 proc       ; Source: https://stackoverflow.com/questions/69083041/trying-to-display-a-32bit-number-in-assembly-8086-32bit
     mov     cx,ax         
@@ -366,59 +366,59 @@ Divide32By10 proc       ; Source: https://stackoverflow.com/questions/69083041/t
     ret   
 Divide32By10 endp    
 
-; El numero N de 32 bits se recibe en DX:AX
+; The 32 bits number N it's received in DX:AX
    
 PrintDecimalFrom32BitFixedPoint proc    ; This name may be so long is truncated by assembler
     PUSH_REGISTERS
-    mov di, 0          ; Contador de digitos del numero N
+    mov di, 0          ; Digit counter of number N
     mov bx, 10         ; Divisor
     
 stack_loop:
-    call Divide32By10  ; Divide por diez N y guarda el residuo en SI
-    push si            ; Guardamos en el stack el numero para leerlo de nuevo luego.
+    call Divide32By10  ; Divide N by ten and store the remainder in SI.
+    push si            ; Pushes the number onto the stack to retreive it later.
     
-    inc di             ; Incrementa el numero de digitos de N
+    inc di             ; Increases the digit number of N. 
     
-    mov cx,dx          ; Temporalmente guardamos la parte alta de N (esto si es un numero que cabe en 16 bits, pues al usar el OR se escriben valores en DX)
-    or cx, ax          ; Revisar si la parte alta y baja de N son iguales a cero.
-    jnz stack_loop     ; Brincar de nuevo al loop si no son cero las dos partes.
+    mov cx,dx          ; We temporarily store the high side of N (which is required for 16 bit values, as the or operation modifies the DX register).
+    or cx, ax          ; This checks if the high side and the low side of N are equal to cero.
+    jnz stack_loop     ; This jumps back again to the loop if neither of both sides are equal to cero.
 
 itneed_zeros?:
-    cmp di, 5          ; Para numeros con un numero de digitos < 5 debemos agregar ceros adelante para representar el punto decimal.
-    jb add_zeros       ; Si hacen falta ceros, los agregamos
+    cmp di, 5          ; In the case of numbers with 5 digits, we need to add more zeros in front of it so we can represent the decimaal point.
+    jb add_zeros       ; If we are missing zeros we just add them
     
     mov cx, 0          
     
-    mov bx, di         ; Cuantos numeros debo de contar antes de agregar el punto decimal?
-    sub bx, 4          ; ((Si el numero tiene 6 digitos, el punto decimal debe de ir en el
-                       ; segundo numero que ha imprimido)) <--- Asi es como se comportan estas dos lineas.
-    mov ah, 02h        ; Imprimir el simbolo de dolar.
+    mov bx, di         ; How many number we need to count before adding the decimal point?
+    sub bx, 4          ; ((If the number has 6 digits, the decimal point must go in the 
+                       ; second number that has been printed)) <--- And that is how this two lines behave.
+    mov ah, 02h        ; This just prints the dolar symbol.
     mov dl, '$'
     int 21h
     
     jmp print32_number
 
 add_zeros:
-    mov cx, 5          ; Calcula cuantos ceros debe de agregar al stack
+    mov cx, 5          ; This calculate how many ceros must be added to the stack.
     sub cx, di
     
 add_zeros_loop:
     push 0             
-    inc di             ; Incrementamos el numero de digitos
+    inc di             ; This increases the digit numbers
     loop add_zeros_loop
     
     jmp itneed_zeros?      
 
 print32_number:
-    cmp cx, bx         ; Ya se debe de imprimir el punto?
+    cmp cx, bx         ; Should the decimal point be printed yet? 
     je add_fixed_point
     
-    cmp cx, di         ; Ya terminamos de imprimir el numero?
+    cmp cx, di         ; This check if the number printing is completed
     je return_print32
     
-    pop dx             ; Sacamos el digito correspondiente del stack
+    pop dx             ; We pop out the corresponding digit from the stack
 
-    add dx, '0'        ; Se imprime el numero
+    add dx, '0'        ; The number is printed.
     int 21h
     
     inc cx
@@ -427,11 +427,11 @@ print32_number:
     
 
 add_fixed_point:
-    mov ah, 02h     ; Imprimir el punto
+    mov ah, 02h     ; The point is printed
     mov dl, '.'
     int 21h
     
-    mov bx, 0FFFFh  ; Valor dummy para que no vuelva a imprimir otro punto.
+    mov bx, 0FFFFh  ; This is like a dummy value so it doesn't prints another point.
     
     jmp print32_number
     
@@ -442,42 +442,42 @@ return_print32:
 PrintDecimalFrom32BitFixedPoint endp
 
 
-; Recibe el numero de 16 bits en AX
+;   This receives 16 bits number from AX
 
 PrintDecimalFrom16Bit proc
     PUSH_REGISTERS 
     
-    mov cx, 10
-    mov di, 0
+    mov cx, 10  ;Set divisor to 10 for decimal conversion
+    mov di, 0   ;Initialize digit counter
     
 div16b_loop:
-    xor dx, dx
-    div cx
+    xor dx, dx  ;Cleans dx for the division
+    div cx      ;Division
     
-    push dx
+    push dx     ;Pushes the remaining (decimal digit) on to the stack
     
-    inc di
+    inc di      ;Increases digit counter
     
-    cmp ax, 0
-    jne div16b_loop
+    cmp ax, 0   ;Checks if quotient is cero
+    jne div16b_loop ;If its different than zero, continues extracting digits
 
 print16_loop:
-    cmp di, 0
-    je return_print16
+    cmp di, 0   ;Check if all digits have been read
+    je return_print16   ;If the counter is zero, then exits the loop
     
-    pop dx
+    pop dx  
     
-    add dl, '0'
+    add dl, '0' ;Converts the number to ascii character
     
-    push ax
+    push ax     
     
     mov ah, 02h
     int 21h
     
     pop ax
     
-    dec di
-    jmp print16_loop
+    dec di      ;Reduce digit counter
+    jmp print16_loop   
     
 return_print16:
     POP_REGISTERS
@@ -485,14 +485,14 @@ return_print16:
 
 PrintDecimalFrom16Bit endp
 
-
+;++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 ; Test function
 ; Prints Hex of dx:ax
 PrintHexFrom32Bit proc
 
     ret
 PrintHexFrom32Bit endp
-
+;++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 
 
 
@@ -502,13 +502,13 @@ PrintHexFrom32Bit endp
 
 ; --------------------------------------- Gillermo
     
-; En number32_input debe de estar el numero
-; Recibe AX, BX, CX y DX en 0   alta:baja 
-; Devuelve en AX, DX un numero    dx:ax
-; de 32 bits.                     bx:cx
+; The number must be in number32_input 
+; Receive AX, BX, CX y DX in 0   high:baja 
+; Returns in AX, DX a 32 bit number      dx:ax
+;                                        bx:cx
 
 convert_32 PROC
-    mov ax, 0 ; Limpiar cuatro registros para convertir un numero de 32 bits
+    mov ax, 0 ; This cleans the four registers in order to parse a 32 bits number 
     mov bx, 0 
     mov cx, 0
     mov dx, 0
@@ -528,48 +528,48 @@ convert_32 PROC
     lea si, NUMBER32_INPUT+2    ; si holds the address of the current char.
 
 convert_loop:
-    cmp di, 0
-    je ExitConvertLoop
+    cmp di, 0 ;Checks if the counter is 0 
+    je ExitConvertLoop  ; if there are no more characters, then exit the loop
     mov bl, [digits_after_decimal_point_count]
     cmp di, bx
     jle convert_loop_add_zeros  ; Uses a fixed value of 0 for the number to add in case the sequence has ended but more zeros are necessary.
                     
-    mov bl, [si]
-    cmp bl, '.' ;
-    je convert_loop_skip_decimal_point
-    sub bl, '0'
-    jmp convert_loop_add_zeros_skip
+    mov bl, [si] ; Loads the current character from the string 
+    cmp bl, '.'  ; Check if the character is "." 
+    je convert_loop_skip_decimal_point ;Skips the "." if there is one
+    sub bl, '0'  ; Converts the ascii to its numeric value
+    jmp convert_loop_add_zeros_skip 
     convert_loop_add_zeros:
-    mov bx, 0
-    convert_loop_add_zeros_skip:
+    mov bx, 0    ; Uses zeros as padding
+    convert_loop_add_zeros_skip:   
     
-    push bx
+    push bx     ; Stores the current digit to the stack
     
-    shl ax, 1   
-    rcl dx, 1
+    shl ax, 1   ; Shifts Ax left by 1 (Value x 2)
+    rcl dx, 1   ; Rotates the carry digit into dx to keep the 32-bit
     
-    mov bx, ax
+    mov bx, ax  
     mov cx, dx
     
-    shl ax, 1
+    shl ax, 1   ;Shift again (Value x 4)
     rcl dx, 1
     
-    shl ax, 1
+    shl ax, 1   ;Shift again (Value x 8)
     rcl dx, 1
     
-    add ax, bx
-    adc dx, cx
+    add ax, bx  ;Adds from (Value x 2) to (Value x 8)
+    adc dx, cx  ;Add with carry for the higher value to dx
     
-    pop bx
-    
-    xor bh, bh
-    add ax, bx
-    adc dx, 0
+    pop bx      ;Restore the digit 
+                
+    xor bh, bh  ;Cleans bh
+    add ax, bx  ;Adds the new digit to the low side of (ax)
+    adc dx, 0   ;Propagate carry to the high side (dx)
 
     convert_loop_skip_decimal_point:
-    dec di
-    inc si
-    jmp convert_loop  
+    dec di      ;Reduces the character counter
+    inc si      ;Increases the pointer for the character string
+    jmp convert_loop    ;Repeats the loop  
     
 ExitConvertLoop:
     ret
@@ -586,33 +586,35 @@ number_verification32 PROC
     push cx
     push dx
     push si
-
+    
+    ;Initialize state variables    
     mov [digits_after_decimal_point_count], 0
     mov [has_reached_decimal_point], 0
     
 
-    lea si, NUMBER32_INPUT
+    lea si, NUMBER32_INPUT  ;Load input address
     mov cx, 0 
-    mov numberVerification32Flag, cl                     
-    mov cl, [si+1]
-    lea si, NUMBER32_INPUT + 2
+    mov numberVerification32Flag, cl    ;Resets error flag                  
+    mov cl, [si+1]          ;gets the number of characters
+    lea si, NUMBER32_INPUT + 2  ;points si to the start of the string
                                
 number_verification32_loop:  
-    mov dl, [si]
-    cmp dl, '.'
+    mov dl, [si]    ;load current character
+    cmp dl, '.'     ;Checks if it's a "."
     je  skip_point
+;----Checks if the character is in a range of values different than numbers using ascii values----
     sub dl, '0'
     cmp dl, 0
-    jl  number_verification32_flag 
+    jl  number_verification32_flag ;Error if the character is < 0
     cmp dl, 9
-    jg  number_verification32_flag
-    inc si
-    loop number_verification32_loop
+    jg  number_verification32_flag ;Error if the character is > 0
+    inc si                         ;Move to next character
+    loop number_verification32_loop ;Repeat until the last character
     jmp number_verification32_return
     
     
 number_verification32_flag:
-    mov al, 1
+    mov al, 1       ;Sets error flag to 1
     mov numberVerification32Flag, al
    
 number_verification32_return:
@@ -647,21 +649,21 @@ number_verification16 PROC
     push si
     
       
-    lea si, ACC_NUM_INPUT
+    lea si, ACC_NUM_INPUT   ;Loads the 16 bit input
     mov cx, 0 
-    mov numberVerification16Flag, cl                     
-    mov cl, [si+1]
-    lea si, ACC_NUM_INPUT + 2
+    mov numberVerification16Flag, cl ;Resets error flag                     
+    mov cl, [si+1]          ;Gets the character count
+    lea si, ACC_NUM_INPUT + 2   ;Sets the start of the string
                                
 number_verification16_loop:  
     mov dl, [si]
-    sub dl, '0'
+    sub dl, '0'             ;Convers from ascii to numeric
     cmp dl, 0
-    jl  number_verification16_flag 
+    jl  number_verification16_flag  ;Error if the character is < 0
     cmp dl, 9
-    jg  number_verification16_flag
+    jg  number_verification16_flag  ;Error if the character is > 0
     inc si
-    loop number_verification16_loop
+    loop number_verification16_loop ;Checks next character
     jmp number_verification16_return
     
     
@@ -722,72 +724,72 @@ create_account PROC
     je number_verification_wrong_format
     call PrintNewline
 
-    xor ax, ax ; Limpiar registros
+    xor ax, ax ; Cleans the registers
     xor cx, cx
     xor dx, dx
     xor bh, bh
-    mov cl, [ACC_NUM_INPUT+1] ; Numero de caracteres que el usuario ingreso
-    lea si, ACC_NUM_INPUT+2   ; La direccion de memoria donde empieza el string
+    mov cl, [ACC_NUM_INPUT+1] ; Number of characters entered by the users
+    lea si, ACC_NUM_INPUT+2   ; This is for the memory address where the string starts
 
 ;convert_acc_number:
-;    mov bl, [si]  ; Asignamos el caracter
-;    sub bl, '0'   ; Conversion a entero
-;    mov dx, 10    ; Asignar diez para multiplicar el numero anterior ax * 10 + bl
+;    mov bl, [si]  ; We assign the character
+;    sub bl, '0'   ; Conversion to integer
+;    mov dx, 10    ; Assign ten as the multiplier for the previous number ax * 10 + bl
 ;    mul dx
 ;    add ax, bx 
 ;   
-;    inc si        ; Pasar al siguiente caracter
+;    inc si        ; Changes to the next character
 ;
 ;    loop convert_acc_number
     call ConvertAccountNumberTo16
     
     mov cl, ACC_COUNT
-    lea si, ACCOUNTS  ; Inicio del bloque de memoria de las cuentas
+    lea si, ACCOUNTS  ; Is the start of the accounts memory block
     xor bx, bx   
     
 check_existance:
     cmp cl, 0
-    je create_new_acc    ; Ninguna cuenta tiene el mismo numero, creamos una nueva
+    je create_new_acc    ; No account has the same number as another one, so we create a new one.
     
     mov bx, [si]
-    cmp ax, bx           ; El numero ingresado tiene es el mismo para otra cuenta, evitamos crear otra.
+    cmp ax, bx           ; If the entered number is he same for another account, we avoid creating a new one.
     je duplicated_acc
     
     dec cl
-    add si, ACC_SIZE     ; Saltamos a la siguiente cuenta
+    add si, ACC_SIZE     ; We jump to the next account.
     jmp check_existance    
 
 create_new_acc:
     mov dx, ax
-    xor ax, ax               ; Estas lineas se utilizan para calcular
-    mov al, ACC_COUNT        ; la direccion de memoria de la cuenta que vamos a crear
-    mov bl, ACC_SIZE         ; de la siguiente forma: ACCOUNTS + ACC_SIZE * ACC_COUNT
+    xor ax, ax               ; This lines are used to calculate
+    mov al, ACC_COUNT        ; the memory address for the account that we are gonna create
+    mov bl, ACC_SIZE         ; in this way : ACCOUNTS + ACC_SIZE * ACC_COUNT 
     mul bl
     lea si, ACCOUNTS
     add si, ax
     mov CURRENT_ACC, si
     
-    mov [si+ACC_NUM], dx     ; Guarda el numero de cuenta
-    mov [si+ACC_STATE], 1    ; Colocamos el estado de la cuenta en activa (0 = inactiva, 1 = activa)
-    lea di, HOLDER_INPUT     ; Primer byte del de input
-    mov cl, [di+1]           ; Contador de caracteres, para un el loop de copy_acc_holder
-    lea di, HOLDER_INPUT+2   ; Primer caracter del input
-    lea si, si+ACC_HOLDER    ; Primer caracter del arreglo de la cuenta
+    mov [si+ACC_NUM], dx     ; Stores the account number
+    mov [si+ACC_STATE], 1    ; We setup the account state as active (0 = inactive, 1 = active)
+    lea di, HOLDER_INPUT     ; First byte from the input
+    mov cl, [di+1]           ; Character counter, for the copy_acc_holder loop
+    lea di, HOLDER_INPUT+2   ; First character from the input
+    lea si, si+ACC_HOLDER    ; First character from the account array
     mov bx, ax
     
 copy_acc_holder:
     mov dx, 0   
     
-    mov al, [di]          ; Copiar del input a la cuenta que estamos creando
+    mov al, [di]          ; Copies the input to the account that we are creating.
     mov [si], al
     
-    inc di                ; Cambiamos de byte (caracter) para el input y el arreglo de la cuenta      
+    inc di                ; We change the byte (character) for the input and the account array 
     inc si                       
     
     loop copy_acc_holder         
     
-    mov al, '$'                  ; Al final de la cadena del nombre se le coloca $ para poder imprimir
-    mov [si], al                 ; sin usar un loop
+    mov al, '$'                  ; At the end of the name string we add the $ symbol in order to print it
+    mov [si], al                 ; without using the loop
 
     call convert_32              ; Converts the current received balance from a string to a 32 bit number saved into dx:ax
     
@@ -830,9 +832,9 @@ number_verification_wrong_format:
             
 create_account ENDP
 ; <---------------------------  Guillermo --------------------------------->
-; Salida: en MAX_BAL_ACC quedara la direccion de memoria de la cuenta
-; con el balance mas grande
-; Esta funcion realiza una busqueda lineal comparando los balances de cada cuenta.
+; Output: MAX_BAL_ACC will store the memory address of the account
+; with the highest balance
+; This function performs a linear search by comparing the balances of each account.
 find_max_bal PROC
     push ax
     push bx
@@ -840,46 +842,46 @@ find_max_bal PROC
     push dx
     push di
     
-    ; Inicializar registros temporales
-    mov ax, 0              ; Parte baja del maximo actual
+    ; Initialize temporary registers
+    mov ax, 0              ; Low side of the current maximum
     mov bx, 0
     mov cx, 0
-    mov dx, 0              ; Parte alta del maximo actual
+    mov dx, 0              ; High side of the current maximum
     
-    lea si, ACCOUNTS       ; SI apunta al primer registro de cuenta
-    mov dl, ACC_COUNT      ; Cargar cantidad de cuentas
-    mov di, dx             ; DI será contador del loop
+    lea si, ACCOUNTS       ; SI points to the first account register
+    mov dl, ACC_COUNT      ; Loads the amount of accounts
+    mov di, dx             ; DI would be the loop counter
     
-    mov dl, 0              ; Limpiar DL
+    mov dl, 0              ; Cleans DL
     
 find_max_loop:
-    cmp di, 0              ; Ya recorrimos todas las cuentas?
+    cmp di, 0              ; Have we look at all the accounts ?
     je exit_fmax
     
-    ; Cargar saldo actual de la cuenta
-    mov cx, [si+ACC_BAL]       ; Parte baja
-    mov bx, [si+ACC_BAL+2]     ; Parte alta
+    ; Loads the current balance on the account
+    mov cx, [si+ACC_BAL]       ; Low side
+    mov bx, [si+ACC_BAL+2]     ; High side
     
-    ; Comparar primero parte alta
+    ; First compares the high side
     
     cmp bx, dx 
-    ja set_temp_max        ; Si parte alta es mayor, nuevo máximo
-    jb next_acc            ; Si es menor, pasar siguiente cuenta
+    ja set_temp_max        ; If the high side is bigger then we have a new maximum 
+    jb next_acc            ; If its smaller we move to the next account
     
-    ; Si parte alta es igual, comparar parte baja
+    ; If both high sides are the same, then we compare the low side
     
     cmp cx, ax
-    ja set_temp_max        ; Si parte baja es mayor, nuevo máximo
+    ja set_temp_max        ; If the low side is bigger, then we have a new maximum
     
     dec di 
-    add si, ACC_SIZE       ; Avanzar siguiente cuenta
+    add si, ACC_SIZE       ; Move to the next account
     jmp find_max_loop
 
 set_temp_max:
-    mov MAX_BAL_ACC, si    ; Guardar direccion de la cuenta máxima
+    mov MAX_BAL_ACC, si    ; Stores the account address for the maximum account
     
-    mov dx, bx             ; Actualizar parte alta máxima
-    mov ax, cx             ; Actualizar parte baja máxima
+    mov dx, bx             ; It updates the maximum High side
+    mov ax, cx             ; It updates the maximum low side
     
     dec di
     add si, ACC_SIZE
@@ -908,36 +910,36 @@ find_min_bal PROC
     push dx
     push di
     
-    ; Inicializar registros temporales
+    ; Initialize temporary registers
     mov bx, 0
     mov cx, 0
     
-    lea si, ACCOUNTS       ; SI apunta al primer registro
+    lea si, ACCOUNTS       ; SI points to the first register
     mov dl, ACC_COUNT
     xor dh, dh
-    mov di, dx             ; DI contador
+    mov di, dx             ; DI counter
     
     mov dl, 0
     
-    ; Inicializar minimo con valor maximo posible (FFFF:FFFF)
-    mov ax, 0FFFFh         ; Parte baja minimo actual
-    mov dx, 0FFFFh         ; Parte alta manimo actual
+    ; Initialize minimum with the biggest posible value (FFFF:FFFF)
+    mov ax, 0FFFFh         ; Current minimum low side
+    mov dx, 0FFFFh         ; Current minimum high side
     
 find_min_loop:
     cmp di, 0
     je exit_fmin
     
-    ; Cargar saldo actual
-    mov cx, [si+ACC_BAL]       ; Parte baja
-    mov bx, [si+ACC_BAL+2]     ; Parte alta
+    ; Loads current balance
+    mov cx, [si+ACC_BAL]       ; Low side
+    mov bx, [si+ACC_BAL+2]     ; High side
     
-    ; Comparar parte alta
+    ; Compares the high side
     
     cmp bx, dx 
-    jb set_temp_min        ; Si es menor, nuevo minimo
-    ja next_acc_fmin       ; Si es mayor, ignorar
+    jb set_temp_min        ; If it's smaller, new minimum
+    ja next_acc_fmin       ; If it's bigger, ignore it
     
-    ; Si parte alta igual, comparar parte baja
+    ; If the high side is the same, compare the low side
     
     cmp cx, ax
     jb set_temp_min
@@ -947,10 +949,10 @@ find_min_loop:
     jmp find_min_loop
 
 set_temp_min:
-    mov MIN_BAL_ACC, si    ; Guardar direccion de minimo
+    mov MIN_BAL_ACC, si    ; Store the minimum's address
     
-    mov dx, bx             ; Actualizar parte alta minima
-    mov ax, cx             ; Actualizar parte baja minima
+    mov dx, bx             ; Update the minimum's high side
+    mov ax, cx             ; Updates the minimum's low side
     
     dec di
     add si, ACC_SIZE
@@ -973,38 +975,38 @@ exit_fmin:
 find_min_bal ENDP
 
 sum_all_balances PROC
-    ; Inicializar acumulador de suma
-    mov ax, 0              ; Parte baja suma total
+    ; Initialize sum accumulator
+    mov ax, 0              ; Low side sum total
     mov bx, 0
     mov cx, 0
-    mov dx, 0              ; Parte alta suma total
+    mov dx, 0              ; High side sum total
     
     mov dl, ACC_COUNT
     
-    mov di, dx             ; DI contador
+    mov di, dx             ; DI counter
     xor dl, dl
-    lea si, ACCOUNTS       ; SI apunta al primer registro
+    lea si, ACCOUNTS       ; SI points to the first register
     
 sum_loop:
     cmp di, 0
     je sum_return
     
-    ; Cargar saldo de cuenta actual
-    mov bx, [si+ACC_BAL]      ; Parte baja
-    mov cx, [si+ACC_BAL+2]    ; Parte alta
+    ; Loads current account balance 
+    mov bx, [si+ACC_BAL]      ; Low side
+    mov cx, [si+ACC_BAL+2]    ; High side
     
-    ; Sumar 32 bits: low con ADD, high con ADC
+    ; Sums 32 bits: low with ADD, high with ADC
     add ax, bx
     adc dx, cx
     
-    add si, ACC_SIZE          ; Siguiente cuenta
+    add si, ACC_SIZE          ; Next account
     
     dec di
     
     jmp sum_loop
 
 sum_return:
-    ; Guardar suma total en BANK_BAL
+    ; Stores total sum in BANK_BAL
     mov [BANK_BAL], ax 
     mov [BANK_BAL+2], dx
     ret
@@ -1016,7 +1018,7 @@ active_inactive_count PROC
     
     xor ax, ax
     
-    ; Reiniciar contadores
+    ; Restart the counters
     mov ACTIVE_ACC, al
     mov INACTIVE_ACC, al
     
@@ -1029,12 +1031,12 @@ count_loop:
     cmp cx, 0
     je return_count
     
-    mov al, [si+ACC_STATE]    ; Leer estado de cuenta
+    mov al, [si+ACC_STATE]    ; Reads the account status 
     
     cmp al, 1
     je inc_active_count
     
-    ; Cuenta inactiva
+    ; Inactive account
     inc INACTIVE_ACC
     dec cx
     
@@ -1042,7 +1044,7 @@ count_loop:
     jmp count_loop
     
 inc_active_count:
-    ; Cuenta activa
+    ; Active account
     inc ACTIVE_ACC
     dec cx
     
@@ -1062,14 +1064,14 @@ show_report PROC
     mov ax, 0
     mov al, ACC_COUNT
     
-    ; Si no hay cuentas, mostrar mensaje
+    ; If there is no account, shows up the message
     cmp al, 0
     je zero_accounts_found
     
-    ; Contar activas/inactivas
+    ; Counts the actives and inactives
     call active_inactive_count 
     
-    ; Mostrar activas
+    ; Shows up the actives
     mov ah, 09h
     mov dx, offset total_de_cuentas_activas_print
     int 21h
@@ -1080,7 +1082,7 @@ show_report PROC
     call PrintDecimalFrom16Bit
     call PrintNewline 
      
-    ; Mostrar inactivas
+    ; Shows up the inactives
     mov ah, 09h
     mov dx, offset total_de_cuentas_inactivas_print
     int 21h
@@ -1091,11 +1093,11 @@ show_report PROC
     call PrintDecimalFrom16Bit
     call PrintNewline
     
-    ; Buscar cuenta maxima y minima
+    ; Search for the accounts with the maximum and minimum balance in them
     call find_max_bal
     call find_min_bal
     
-    ; Mostrar cuenta maxima
+    ; Shows the account with the maximum balance
     mov si, MAX_BAL_ACC
 
     mov ah, 09h
@@ -1107,7 +1109,7 @@ show_report PROC
     
     call PrintNewline
     
-    ; Mostrar cuenta minima
+    ; Shows the account with the minimum balance
     mov si, MIN_BAL_ACC
     
     mov ah, 09h
@@ -1119,7 +1121,7 @@ show_report PROC
     
     call PrintNewline
     
-    ; Mostrar saldo total banco
+    ; Show the bank's total balance
     mov ah, 09h
     mov dx, offset saldo_total_del_banco_print
     int 21h
@@ -1203,18 +1205,18 @@ ConvertAccountNumberTo16 proc
     mov bx, 0
 
     mov ax, 0
-    lea si, ACC_NUM_INPUT+2     ; La direccion de memoria donde empieza el string
+    lea si, ACC_NUM_INPUT+2     ; Memory address where the string starts
     mov ch, 0
-    mov cl, byte ptr [ACC_NUM_INPUT+1]   ; Tamano del string.
+    mov cl, byte ptr [ACC_NUM_INPUT+1]   ;  String size.
 
     convert_acc_number:
-    mov bl, [si]  ; Asignamos el caracter
-    sub bl, '0'   ; Conversion a entero
-    mov dx, 10    ; Asignar diez para multiplicar el numero anterior ax * 10 + bl
+    mov bl, [si]  ; We assign the character
+    sub bl, '0'   ; Integer conversion
+    mov dx, 10    ; Sets the multiplier to 10 for the AX * 10 + BL operation   
     mul dx        ; dx:ax = ax * dx
     add ax, bx
    
-    inc si        ; Pasar al siguiente caracter
+    inc si        ; Moves to the next character
 
     loop convert_acc_number
 
