@@ -49,6 +49,8 @@ next_menu                 db 00h            ; This is a byte that depends on the
     HOLDER_INPUT        db 21, ?, 21 dup(?)
     ACC_NUM_INPUT       db 6, ?, 6 dup('0')
     NUMBER32_INPUT      db 12, ?, 12 dup(?)
+    NUMBER32_INPUT_FIXED_POINT_ZEROS    db 4 dup('0') ; This Mantains 4 consecutive zeros in memory
+                                                    ; that are added to numbers depending on the number of digits after decimal point.
 ; --------------------------------------- Gillermo
 
 
@@ -56,6 +58,11 @@ next_menu                 db 00h            ; This is a byte that depends on the
 FindAccountByAccountNumberError db 0    ; 1 = Error. Error flag for the FindAccountByAccountNumber procedure.
 numberVerification16Flag db 0           ; 
 numberVerification32Flag db 0           ;
+
+; Counts the number of digits present after the decimal point.
+; It's updated by number_verification32 for fixed point arithmetic and used on NUMBER32_INPUT.
+digits_after_decimal_point_count db 0
+has_reached_decimal_point   db 0    ; This is used to check no more than one decimal point is present in NUMBER32_INPUT.
 
 ; Menu names (jumps)
 ; 1 CreateAccountMenu
@@ -99,26 +106,30 @@ main_menu_message_part_7 db "7.   Salir", 0Dh,0Ah, "$"
 create_account_menu_enter_holder db         "Digite el nombre del propietario:", 0Dh,0Ah, "$"
 create_account_menu_enter_account_number db "Digite el numero de cuenta:", 0Dh,0Ah, "$"
 create_account_menu_enter_balance db        "Digite el saldo:", 0Dh,0Ah, "$"
-create_account_menu_already_exists db       "El numero de cuenta ya existe, intentalo con otro...", 0Dh,0Ah, "$"
+create_account_menu_already_exists db       "El numero de cuenta ya existe, intentelo con otro...", 0Dh,0Ah, "$"
 create_account_menu_succesfully_created db  "La cuenta ha sido creada correctamente.", 0Dh,0Ah, "$" 
-create_account_menu_limit_exceeded db       "No hay espacio suficiente para crear otra cuenta, intentalo de nuevo mas tarde...", 0Dh, 0Ah, "$"
+create_account_menu_limit_exceeded db       "No hay espacio suficiente para crear otra cuenta, intentelo de nuevo mas tarde...", 0Dh, 0Ah, "$"
 create_account_menu_wrong_format db         "El numero que ingreso no esta en el formato correcto" , 0Dh, 0Ah, "$"
 
 ; FindAccountByAccountNumber error print
 find_account_by_account_number_error_message db "No se encontro una cuenta con ese numero de cuenta.", 0Dh,0Ah, "$"
 
-; deposit_to_an_account prints
+; deposit_to_an_account prints.
 deposit_to_an_account_indicate_amount db "Indique el monto por depositar.", 0Dh,0Ah, "$"
-; withdraw_from_an_account prints
+; withdraw_from_an_account prints.
 withdraw_from_an_account_indicate_amount db "Indique el monto por retirar.", 0Dh,0Ah, "$"
-; check_balance_of_an_account prints
+; check_balance_of_an_account prints.
 check_balance_of_an_account_show_amount db "El saldo de la cuenta es: $"
 
-; deactivate_an_account prints
+; deactivate_an_account prints.
 deactivate_an_account_success_message db "Cuenta desactivada.", 0Dh,0Ah, "$"
+deactivate_an_account_repeated_account_message db "La cuenta indicada ya fue desactivada.", 0Dh,0Ah, "$"
 
-;Overdraft while withdrawing
+; Overdraft while withdrawing.
 overdraft_error_message db "No se puede extraer ese monto debido a sobregiro de la cuenta.", 0Dh, 0Ah, "$"
+
+; Inactive account when depositing or withdrawing.
+transaction_on_inactive_account_error_message db "La cuenta indicada esta desactivada.", 0Dh, 0Ah, "$"
 
 
 
@@ -504,16 +515,33 @@ convert_32 PROC
     
     xor di, di
     mov dl, [NUMBER32_INPUT+1]
-    mov di, dx
+    mov di, dx                  ; di holds the amount of digits.
+    ; This makes the function keep adding zeros (i. e. multiplying by 10) as much as the digit count after the decimal point is less than 4.
+    ; i. e. added zeros = 4 - (digits after '.'). This value is saved to dx here.
+    mov dx, 4
+    sub dl, [digits_after_decimal_point_count]
+    add di, dx
+    ; digits_after_decimal_point_count now will hold the number of zeros to add.
+    mov [digits_after_decimal_point_count], dl
+
     xor dx, dx
-    lea si, NUMBER32_INPUT+2
+    lea si, NUMBER32_INPUT+2    ; si holds the address of the current char.
 
 convert_loop:
     cmp di, 0
     je ExitConvertLoop
+    mov bl, [digits_after_decimal_point_count]
+    cmp di, bx
+    jle convert_loop_add_zeros  ; Uses a fixed value of 0 for the number to add in case the sequence has ended but more zeros are necessary.
                     
     mov bl, [si]
+    cmp bl, '.' ;
+    je convert_loop_skip_decimal_point
     sub bl, '0'
+    jmp convert_loop_add_zeros_skip
+    convert_loop_add_zeros:
+    mov bx, 0
+    convert_loop_add_zeros_skip:
     
     push bx
     
@@ -537,7 +565,8 @@ convert_loop:
     xor bh, bh
     add ax, bx
     adc dx, 0
-    
+
+    convert_loop_skip_decimal_point:
     dec di
     inc si
     jmp convert_loop  
@@ -547,13 +576,21 @@ ExitConvertLoop:
     
 convert_32 ENDP
 
+
+; Checks for character errors in a user given number (NUMBER32_INPUT) that can include a decimal point.
+; Also counts the number of digits present after the decimal point.
+; this is used for fixed point arithmetic.
+; digits_after_decimal_point_count stores this count.
 number_verification32 PROC
     push ax
     push cx
     push dx
     push si
+
+    mov [digits_after_decimal_point_count], 0
+    mov [has_reached_decimal_point], 0
     
-      
+
     lea si, NUMBER32_INPUT
     mov cx, 0 
     mov numberVerification32Flag, cl                     
@@ -587,7 +624,19 @@ number_verification32_return:
     ret 
 skip_point:
     inc si
+    mov [digits_after_decimal_point_count], cl  ; cl has the amount of digits left input by the user, including the current '.'.
+    sub [digits_after_decimal_point_count], 1   ; count only the remaining digits after the '.'.
+    ; If there are more than 4 digits after the decimal point, the format is considered incorrect.
+    cmp [digits_after_decimal_point_count], 4
+    jg number_verification32_flag
+    ; Check that the decimal point was not reached several times.
+    cmp has_reached_decimal_point, 1
+    je number_verification32_flag
+    mov [has_reached_decimal_point], 1
+    ; Loop again if no error have ocurred.
     loop number_verification32_loop
+    ; This jump is reached if the number ended in a decimal point e. g.: "2." This is considered incorrect.
+    jmp number_verification32_flag
 number_verification32 ENDP
 
 
@@ -799,7 +848,7 @@ find_max_bal PROC
     
     lea si, ACCOUNTS       ; SI apunta al primer registro de cuenta
     mov dl, ACC_COUNT      ; Cargar cantidad de cuentas
-    mov di, dx             ; DI ser· contador del loop
+    mov di, dx             ; DI ser√° contador del loop
     
     mov dl, 0              ; Limpiar DL
     
@@ -814,23 +863,23 @@ find_max_loop:
     ; Comparar primero parte alta
     
     cmp bx, dx 
-    jg set_temp_max        ; Si parte alta es mayor, nuevo m·ximo
-    jl next_acc            ; Si es menor, pasar siguiente cuenta
+    ja set_temp_max        ; Si parte alta es mayor, nuevo m√°ximo
+    jb next_acc            ; Si es menor, pasar siguiente cuenta
     
     ; Si parte alta es igual, comparar parte baja
     
     cmp cx, ax
-    jg set_temp_max        ; Si parte baja es mayor, nuevo m·ximo
+    ja set_temp_max        ; Si parte baja es mayor, nuevo m√°ximo
     
     dec di 
     add si, ACC_SIZE       ; Avanzar siguiente cuenta
     jmp find_max_loop
 
 set_temp_max:
-    mov MAX_BAL_ACC, si    ; Guardar direccion de la cuenta m·xima
+    mov MAX_BAL_ACC, si    ; Guardar direccion de la cuenta m√°xima
     
-    mov dx, bx             ; Actualizar parte alta m·xima
-    mov ax, cx             ; Actualizar parte baja m·xima
+    mov dx, bx             ; Actualizar parte alta m√°xima
+    mov ax, cx             ; Actualizar parte baja m√°xima
     
     dec di
     add si, ACC_SIZE
@@ -1150,6 +1199,8 @@ ConvertAccountNumberTo16 proc
     push bx
     push dx
     push cx
+    
+    mov bx, 0
 
     mov ax, 0
     lea si, ACC_NUM_INPUT+2     ; La direccion de memoria donde empieza el string
@@ -1225,6 +1276,9 @@ deposit_to_an_account proc
         POP_REGISTERS
         ret ; generally jumps to MainMenu (using ret mantains the stack valid)
         successfully_found_account1:
+    ; If the account is inactive, print an error and return.
+    cmp byte ptr [si+ACC_STATE], 0   ; 0 means inactive.
+    je transaction_on_inactive_account_error
     push si ; save si for later.
 
     ; get the sum to deposit as a string from the user. 
@@ -1264,7 +1318,12 @@ deposit_verification_wrong_format_without_pop:
     mov ah, 09h
     mov dx, offset create_account_menu_wrong_format 
     int 21h
-    
+    jmp deposit_return
+
+transaction_on_inactive_account_error:
+    mov ah, 09h
+    mov dx, offset transaction_on_inactive_account_error_message
+    int 21h
 
 deposit_return:
     POP_REGISTERS
@@ -1305,6 +1364,9 @@ withdraw_from_an_account proc
         POP_REGISTERS
         ret ; generally jumps to MainMenu (using ret mantains the stack valid)
         successfully_found_account2:
+    ; If the account is inactive, print an error and return.
+    cmp byte ptr [si+ACC_STATE], 0   ; 0 means inactive.
+    je transaction_on_inactive_account_error
     push si ; save si for later.
 
     ; get the sum to withdraw as a string from the user. 
@@ -1441,7 +1503,7 @@ check_balance_of_an_account endp
 ; Similar code to deposit_to_an_account but overwrites the account's state instead of the balance.
 deactivate_an_account proc
     PUSH_REGISTERS
-    ; print("Ingrese el numero de cuenta a desactivar.")
+    ; print("Ingrese el numero de cuenta por desactivar.")
     mov ah, 09h
     mov dx, offset deactivate_account_menu_opening_message
     int 21h
@@ -1472,14 +1534,15 @@ deactivate_an_account proc
         ret ; generally jumps to MainMenu (using ret mantains the stack valid)
         successfully_found_account4:
 
+    add si, ACC_STATE ; add the offset of the state within an account.
+    ; Sobresecribir el estado de la cuenta en la direccion dada por si con inactiva (0 = inactiva, 1 = activa)
+    cmp byte ptr [si], 0
+    je account_already_deactivated_error
+    mov byte ptr [si], 0 ; si now holds the address of the balance to subtract from.
     ; print "Cuenta desactivada."
     mov ah, 09h
     mov dx, offset deactivate_an_account_success_message
     int 21h 
-
-    add si, ACC_STATE ; add the offset of the state within an account.
-    ; Sobresecribir el estado de la cuenta en la direccion dada por si con inactiva (0 = inactiva, 1 = activa)
-    mov byte ptr [si], 0 ; si now holds the address of the balance to subtract from.
     jmp deactivate_return
 
 deactivate_verification_wrong_format_without_pop:
@@ -1487,13 +1550,17 @@ deactivate_verification_wrong_format_without_pop:
     mov ah, 09h
     mov dx, offset create_account_menu_wrong_format 
     int 21h
-    
+    jmp deactivate_return
+
+account_already_deactivated_error:
+    mov ah, 09h
+    mov dx, offset deactivate_an_account_repeated_account_message
+    int 21h 
 
 deactivate_return:
     POP_REGISTERS
     ret
 deactivate_an_account endp
-
 
 
 
